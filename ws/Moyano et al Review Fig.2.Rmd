@@ -1,0 +1,224 @@
+---
+title: "Moyano et al Review Fig.2"
+author: "Björn Illing"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    code_folding: show
+    collapse: no
+    df_print: paged
+    fig_caption: yes
+    fig_height: 5
+    fig_width: 5
+    highlight: textmate
+    theme: spacelab
+    toc: yes
+    toc_float: yes
+    css: ../resources/style.css
+  pdf_document:
+    df_print: default
+    fig_caption: yes
+    fig_height: 4
+    fig_width: 4
+    highlight: tango
+    latex_engine: xelatex
+    number_sections: yes
+    toc_depth: 2
+  word_document:
+    fig_caption: yes
+    fig_height: 4
+    fig_width: 4
+    highlight: tango
+    toc: yes
+    toc_depth: 2
+output_dir: "docs"
+documentclass: article
+fontsize: 12pt
+mainfont: Arial
+mathfont: LiberationMono
+monofont: DejaVu Sans Mono
+classoption: a4paper
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Preparations
+
+```{r LoadLibraries, message=FALSE}
+library(tidyverse)  #for data wrangling etc
+library(cowplot)    #for adding theme
+library(ggrepel)    #for labelling scatter plots
+library(emmeans)    #for statistical comparisons
+```
+
+# Read in the data
+
+```{r read_data, results='markdown', eval=TRUE}
+data = read.csv2('../data/final_dataset_yury_csv_2020_05_21.csv',sep=",")
+str(data)
+head(data)
+
+```
+
+Reformat variables
+
+```{r prepare, results='markdown', eval=TRUE, hidden=TRUE}
+data = data %>% mutate(Year=as.numeric(Column1),
+                       GERAS.Age.1=as.numeric(GERAS.Age.1),
+                       GERAS.Age.1_billions=as.numeric(GERAS.Age.1/1000),
+                       GERAS_N20_comp_billions=as.numeric(GERAS_N20_comp/1000),
+                       N20.Age.0=as.numeric(N20.Age.0),
+                       N20.Age.0_billions=as.numeric(N20.Age.0/1000))#,
+                       #GERAS_Age1_adj_thousands=as.numeric(GERAS_Age1_adj/1000))
+                       
+```
+
+Read in additional data from https://standardgraphs.ices.dk/ViewCharts.aspx?key=13313
+
+
+```{r prepare2, results='markdown', eval=TRUE, hidden=TRUE}
+
+data2 = read.csv2('../data/ICES_WBSS_herring_data_2021_05_21.csv',sep=",")
+str(data2)
+
+
+data2 = data2 %>% mutate(Year=as.numeric(Year),
+                         Low.Recruitment_billions=as.numeric(Low.Recruitment/1000000),
+                         Recruitment_billions=as.numeric(Recruitment/1000000),
+                         High.Recruitment_billions=as.numeric(High.Recruitment/1000000),
+                         SSB_thousands=as.numeric(SSB/1000),
+                         Low.SSB_thousands=as.numeric(Low.SSB/1000),
+                         High.SSB_thousands=as.numeric(High.SSB/1000),
+                         Catches_thousands=as.numeric(Catches/1000))
+str(data2)
+```    
+
+# Create individual plots
+
+## Recruitment
+
+```{r}
+recruitment_plot<-ggplot(data2)+
+  geom_bar(aes(y=Recruitment_billions ,x=Year),stat="identity", fill="skyblue", alpha=0.7, width = 0.7)+
+  geom_errorbar(aes(x=Year, ymin=Low.Recruitment_billions, ymax=High.Recruitment_billions), width=0.4, colour="#FFAE42", alpha=1, size=0.7)+
+  scale_x_continuous(name="Year",limits = c(1990,2021), breaks = c(1990,1995,2000,2005,2010,2015,2020))+
+  scale_y_continuous(name = "Recruitment (billions)")+
+  theme_cowplot()
+recruitment_plot
+```
+
+
+Second y axis (https://stackoverflow.com/questions/3099219/ggplot-with-2-y-axes-on-each-side-and-different-scales):
+
+
+```{r}
+scaleFactor <- max(data2$Recruitment_billions)/max(data$N20.Age.0_billions)
+```
+
+```{r}
+recruitment_plot2<-ggplot()+
+  geom_bar(data=data2,aes(y=Recruitment_billions ,x=Year),stat="identity", fill="skyblue", alpha=0.5, width = 0.7)+
+  geom_errorbar(data=data2,aes(x=Year, ymin=Low.Recruitment_billions, ymax=High.Recruitment_billions), width=0.4, colour="skyblue", alpha=1, size=0.7)+
+  geom_line(data=data,aes(y=N20.Age.0_billions * scaleFactor, x=Year, colour="red"), size=0.7)+
+  scale_y_continuous(name="Recruitment (billions)", sec.axis=sec_axis(~./scaleFactor, name="N20 (billions)"))+
+  scale_x_continuous(name="Year",limits = c(1990,2021), breaks = c(1990,1995,2000,2005,2010,2015,2020))+
+  theme_cowplot()+theme(axis.title.y.right=element_text(color="red"),axis.text.y.right=element_text(color="red"), legend.position = c(0.5, 0.7))+
+  scale_colour_discrete(name = "", labels = c("N20"))
+recruitment_plot2
+```
+Previous orange colour used: #FFAE42
+
+## GERAS
+
+Comparison of N20 Age 0 and GERAS Age 1 relationship.
+
+```{r GERAS N20 linear model}
+GERAS_N20_lm1<-lm(data=data,GERAS.Age.1_billions~GERAS_N20_comp_billions)
+summary(GERAS_N20_lm1)
+```
+```{r}
+newdata=emmeans(GERAS_N20_lm1,~GERAS_N20_comp_billions,at=list(GERAS_N20_comp_billions=seq(min(data$GERAS_N20_comp_billions,na.rm = T),max(data$GERAS_N20_comp_billions,na.rm = T),len=100))) %>% as.data.frame
+
+head(newdata)
+```
+
+
+```{r}
+# All labels should be to the right of 3.
+x_limits <- c(7, NA)
+
+geras_N20<-ggplot(data=data)+
+  geom_point(aes(y=GERAS.Age.1_billions,x=GERAS_N20_comp_billions),colour="skyblue", alpha=1, size=3)+
+  theme_cowplot()+
+  scale_x_continuous(name="N20 Age 0 (billions)",limits = c(0,25))+
+  scale_y_continuous(name="GERAS Age 1 (billions)",limits = c(0,2.5))+
+  #coord_cartesian(clip = "off")+
+  geom_point(data=data %>% filter(Year>2017),aes(y=GERAS.Age.1_billions,x=GERAS_N20_comp_billions),colour="red", alpha=1, size=3)+
+  geom_label_repel(data=data %>% filter(Year>2017), # Filter data first
+    aes(y=GERAS.Age.1_billions,x=GERAS_N20_comp_billions,label=Year),colour="red",alpha=1,box.padding   = 0.35, point.padding = 0.1,segment.color = 'red',min.segment.length = 0, size = 3.5,xlim  = x_limits) #fill = "white", xlim = c(-Inf, Inf), ylim = c(-Inf, Inf)
+geras_N20
+```
+
+```{r}
+geras_N20_01<-ggplot()+
+  geom_line(data=newdata,aes(x=GERAS_N20_comp_billions,y=emmean),size=2,colour="skyblue",alpha=0.7)+geom_ribbon(data=newdata,aes(x=GERAS_N20_comp_billions,y=emmean,ymin=lower.CL,ymax=upper.CL),alpha=0.3, fill="skyblue")+
+  theme_cowplot()+
+  geom_point(data=data,aes(y=GERAS.Age.1_billions,x=GERAS_N20_comp_billions),colour="skyblue", alpha=1, size=3)+
+  scale_x_continuous(name="N20 Age 0 (billions)",limits = c(0,25))+
+  scale_y_continuous(name="GERAS Age 1 (billions)",limits = c(0,2.5))+
+  #coord_cartesian(clip = "off")+
+  geom_point(data=data %>% filter(Year>2017),aes(y=GERAS.Age.1_billions,x=GERAS_N20_comp_billions),colour="red", alpha=1, size=3)+
+  geom_label_repel(data=data %>% filter(Year>2017), # Filter data first
+    aes(y=GERAS.Age.1_billions,x=GERAS_N20_comp_billions,label=Year),colour="red",alpha=1,box.padding   = 0.35, point.padding = 0.1,segment.color = 'red',min.segment.length = 0, size = 3.5,xlim  = x_limits) #fill = "white", xlim = c(-Inf, Inf), ylim = c(-Inf, Inf)
+geras_N20_01
+```
+
+
+## SSB
+
+Information retrieved here: http://ices.dk/sites/pub/Publication%20Reports/Advice/2020/2020/her.27.20-24.pdf
+
+```{r SSB plot}
+SSB_plot<-ggplot(data2)+
+  geom_line(aes(y=SSB_thousands,x=Year),colour="darkcyan", alpha=0.7, size=1.3)+
+  geom_ribbon(aes(y=SSB_thousands,x=Year,ymin = Low.SSB_thousands, ymax = High.SSB_thousands), fill = "darkcyan", alpha=0.4)+
+  scale_x_continuous(name="Year",limits = c(1990,2021), breaks = c(1990,1995,2000,2005,2010,2015,2020))+
+  scale_y_continuous(name = "SSB (in 1000 t)")+
+  geom_segment(aes(x=1990,xend=2020,y=151,yend=151,linetype="MSYBtrigger"),colour="red",size=1.3)+
+  geom_segment(aes(x=1990,xend=2020,y=149,yend=149,linetype ="Bpa"),colour="black" ,size=1.3)+
+  geom_segment(aes(x=1990,xend=2020,y=120,yend=120,linetype="Blim"),colour="blue",size=1.3)+
+  scale_linetype_manual("",values=c("Blim"=2,"Bpa"=3,"MSYBtrigger"=1), labels=c(expression(B[lim]),expression(B[pa]),expression(MSYB[trigger])),
+                        guide = guide_legend(override.aes = list(color = c("blue", "black","red"))))+
+
+  theme_cowplot()+theme(legend.position = c(0.5, 0.7),legend.text.align = 0)
+SSB_plot
+
+#,linetype="11"
+```
+
+## Catches
+
+```{r Catches plot}
+Catches_plot<-ggplot(data2)+
+  geom_bar(aes(y=Catches_thousands ,x=Year),stat="identity", fill="skyblue", alpha=0.7, width = 0.7)+
+  scale_x_continuous(limits = c(1990,2021), breaks = c(1990,1995,2000,2005,2010,2015,2020))+
+  scale_y_continuous(name = "Catches (in 1000 t)")+
+  theme_cowplot()
+Catches_plot
+```
+
+# Summary figure
+
+```{r summary fig}
+Fig.2<-plot_grid(recruitment_plot2, SSB_plot, geras_N20_01, Catches_plot,labels = c('A', 'B','C','D'), ncol = 2,nrow=2, align = "hv")+
+  draw_label(expression(paste("y = 0.41(±0.07)+0.07(±0.01) x,",~R^2, " = 0.73,",~p<"0.001", sep="")),size=10,vjust=3,hjust=1.25)
+Fig.2
+
+```
+
+```{r export fig}
+save_plot("Figure 2.pdf",Fig.2,nrow=2,ncol=2,base_asp = 1.3)
+```
+
