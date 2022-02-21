@@ -102,7 +102,7 @@ Second y axis (https://stackoverflow.com/questions/3099219/ggplot-with-2-y-axes-
 
 
 ```{r scale}
-scaleFactor <- max(data$Recruitment_billions)/max(data$N20.Age.0_billions)
+scaleFactor <- max(data$Recruitment_billions)/max(data$N20.Age.0_billions,na.rm=TRUE)
 ```
 
 ```{r recruitment_plot, message=FALSE, warning=FALSE}
@@ -110,9 +110,9 @@ recruitment_plot2<-ggplot()+
   geom_bar(data=data,aes(y=Recruitment_billions ,x=Year),stat="identity", fill="skyblue", alpha=0.5, width = 0.7)+
   geom_errorbar(data=data,aes(x=Year, ymin=Low.Recruitment_billions, ymax=High.Recruitment_billions), width=0.4, colour="skyblue", alpha=1, size=0.7)+
   geom_line(data=data,aes(y=N20.Age.0_billions * scaleFactor, x=Year, colour="red"), size=0.7)+
-  scale_y_continuous(name="Recruitment (billions)", sec.axis=sec_axis(~./scaleFactor, name="N20 (billions)"))+
+  scale_y_continuous(name="Recruitment Age 0 (billions)", sec.axis=sec_axis(~./scaleFactor, name="N20 Age 0 (billions)"))+
   scale_x_continuous(name="Year",limits = c(1990,2021), breaks = c(1990,1995,2000,2005,2010,2015,2020))+
-  theme_cowplot()+theme(axis.title.y.right=element_text(color="red"),axis.text.y.right=element_text(color="red"), legend.position = c(0.5, 0.7))+
+  theme_cowplot()+theme(axis.title.y.right=element_text(color="red"),axis.text.y.right=element_text(color="red"), legend.position = c(0.5, 0.7),legend.text = element_text(colour="red"))+
   scale_colour_discrete(name = "", labels = c("N20"))
 recruitment_plot2
 ```
@@ -200,7 +200,7 @@ Catches_plot
 
 ```{r summary fig, message=FALSE, warning=FALSE}
 Fig.2<-plot_grid(recruitment_plot2, SSB_plot, geras_N20_01, Catches_plot,labels = c('A', 'B','C','D'), ncol = 2,nrow=2, align = "hv")+
-  draw_label(expression(paste("y = 0.41(±0.07)+0.07(±0.01) x,",~R^2, " = 0.73,",~p<"0.001", sep="")),size=10,vjust=3,hjust=1.25)
+  draw_label(expression(paste("y = 0.41(±0.07)+0.07(±0.01) x,",~R^2, " = 0.74,",~p<"0.001", sep="")),size=10,vjust=3,hjust=1.25)
 Fig.2
 
 ```
